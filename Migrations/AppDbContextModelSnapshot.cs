@@ -124,7 +124,8 @@ namespace WebFarm.Migrations
                     b.HasIndex("Token")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .IsUnique();
 
                     b.ToTable("UserTokens");
                 });
@@ -150,10 +151,9 @@ namespace WebFarm.Migrations
             modelBuilder.Entity("WebFarm.Models.UserToken", b =>
                 {
                     b.HasOne("WebFarm.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .WithOne("UserToken")
+                        .HasForeignKey("WebFarm.Models.UserToken", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("User");
                 });
@@ -161,6 +161,8 @@ namespace WebFarm.Migrations
             modelBuilder.Entity("WebFarm.Models.User", b =>
                 {
                     b.Navigation("FarmLands");
+
+                    b.Navigation("UserToken");
                 });
 #pragma warning restore 612, 618
         }

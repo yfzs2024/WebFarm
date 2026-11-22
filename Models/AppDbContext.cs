@@ -31,6 +31,12 @@ public class AppDbContext : DbContext
             entity.Property(u => u.Cash)
                 .IsRequired();
 
+            // Relationship
+            entity.HasOne(u => u.UserToken)
+                .WithOne(ut => ut.User)
+                .HasForeignKey<UserToken>(ut => ut.UserId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
             // Index
             entity.HasIndex(u => u.UserName)
                 .IsUnique();
@@ -103,18 +109,10 @@ public class AppDbContext : DbContext
             entity.Property(ut => ut.Token)
                 .IsRequired()
                 .HasMaxLength(128);
-            
-            // Relationship
-            entity.HasOne(ut => ut.User)
-                .WithMany()
-                .HasForeignKey(ut => ut.UserId)
-                .IsRequired()
-                .OnDelete(DeleteBehavior.Cascade);
 
             // Index
             entity.HasIndex(ut => ut.Token)
                 .IsUnique();
-            entity.HasIndex(ut => ut.UserId); 
         });
     }
 }

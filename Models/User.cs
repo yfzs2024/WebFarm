@@ -5,6 +5,6 @@ public class User
     public string UserName { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public int Cash { get; set; }
-    // Relation Property
     public List<FarmLand> FarmLands { get; set; } = [];
+    public UserToken? UserToken { get; set; }
 }
