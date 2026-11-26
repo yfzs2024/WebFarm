@@ -13,7 +13,7 @@
 | 时间格式 | ISO 8601 UTC，例如 `2026-11-30T08:00:00.0000000Z` |
 | 字符编码 | UTF-8 |
 
-所有接口均为 `POST`，且路径区分大小写、**不带**尾部斜杠。
+接口以 `POST` 为主，`GET` 接口（`/api/crops`、`/api/status`）没有请求体；路径区分大小写、**不带**尾部斜杠。
 
 ## 2. 鉴权
 
@@ -52,6 +52,9 @@ Authorization: Bearer <token>
 | POST | `/api/cancel` | 是 | 注销账号（删除用户及其数据） |
 | POST | `/api/changepassword` | 是 | 修改当前登录用户的密码 |
 | POST | `/api/logout` | 是 | 登出，作废当前 token（不删除用户） |
+| GET | `/api/crops` | 是 | 查询所有谷物信息 |
+| GET | `/api/status` | 是 | 查询当前用户状态（用户名、现金、是否可收获、农田数量等） |
+| POST | `/api/plant` | 是 | 在指定农田种植作物（扣现金） |
 
 ---
 
@@ -83,6 +86,13 @@ Authorization: Bearer <token>
 ```json
 "用户名已存在"
 ```
+
+**新建用户的初始状态**
+
+- `cash = 100`
+- 自动获得一块 `index = 0` 的田（`scale = 1`），初始**没有作物**（`cropId` / `plantedDate` 为空）
+
+> 用户和这块田在同一次 `SaveChanges` 中写入，不会出现只有用户没有田的中间状态。
 
 **示例**
 
@@ -214,13 +224,205 @@ curl -X POST http://localhost:5038/api/logout \
 
 ---
 
+### 3.6 谷物列表 `GET /api/crops`
+
+需要鉴权。返回全部谷物（crop）信息，按 `id` 升序，属于公共只读数据。
+
+**请求体**：无（`GET`）。
+
+**响应**
+
+- `200 OK` —— **顶层是 object**，谷物数组放在 `crops` 字段下（不要当成顶层数组用）：
+
+```json
+{
+  "crops": [
+    { "id": 2, "cropName": "小麦", "seedCost": 10, "matureTime": 1 },
+    { "id": 3, "cropName": "水稻", "seedCost": 15, "matureTime": 2 }
+  ]
+}
+```
+
+表中没有数据时返回空数组：
+
+```json
+{ "crops": [] }
+```
+
+- `401 Unauthorized` —— 未携带/携带无效 token
+
+**示例**
+
+```bash
+curl http://localhost:5038/api/crops \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 3.7 用户状态 `GET /api/status`
+
+需要鉴权。返回当前登录用户的整体状态：用户名、现金、是否可收获、农田数量，以及每块农田的明细。
+
+**请求体**：无（`GET`）。
+
+**响应**
+
+- `200 OK`：
+
+```json
+{
+  "userName": "farmer01",
+  "cash": 100,
+  "canYield": true,
+  "farmCount": 2,
+  "farmLands": [
+    {
+      "index": 0,
+      "scale": 1,
+      "cropId": 2,
+      "cropName": "小麦",
+      "plantedDate": "2026-11-29T08:00:00Z",
+      "matureTime": 1,
+      "canYield": true
+    },
+    {
+      "index": 1,
+      "scale": 1,
+      "cropId": null,
+      "cropName": null,
+      "plantedDate": null,
+      "matureTime": null,
+      "canYield": false
+    }
+  ]
+}
+```
+
+- `401 Unauthorized` —— 未携带/携带无效 token
+
+**字段说明**
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `userName` | string | 当前登录用户名 |
+| `cash` | int | 现金余额 |
+| `canYield` | bool | 是否有**至少一块**农田的作物已成熟、可以收获 |
+| `farmCount` | int | 该用户拥有的农田总数 |
+| `farmLands` | FarmLandDto[] | 农田明细，按 `index` 升序 |
+
+`FarmLandDto` 各字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | int | 农田编号 |
+| `scale` | int | 农田规模 |
+| `cropId` | int? | 已种植作物 id，无作物时为 `null` |
+| `cropName` | string? | 作物名称，无作物时为 `null` |
+| `plantedDate` | DateTime? | 种植时间（UTC），无作物时为 `null` |
+| `matureTime` | int? | 作物成熟所需天数，无作物时为 `null` |
+| `canYield` | bool | 该块农田的作物是否已成熟可收获 |
+
+> 成熟判断：`plantedDate + matureTime 天 <= 当前 UTC 时间` 即视为可收获；无作物或未到期的农田为 `false`。
+
+**示例**
+
+```bash
+curl http://localhost:5038/api/status \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### 3.8 种植作物 `POST /api/plant`
+
+需要鉴权。在用户指定的农田上种植作物：扣除 `seedCost` 现金，记录种植时间（UTC）与作物。
+
+**请求体**
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `index` | int | 是 | 农田编号（用户拥有的田，从 0 开始） |
+| `cropId` | int | 是 | 要种植的作物 id |
+
+```json
+{ "index": 0, "cropId": 2 }
+```
+
+**响应**
+
+- `200 OK` —— 种植成功，返回最新用户状态（结构与 `/api/status` 相同）：
+
+```json
+{
+  "userName": "farmer01",
+  "cash": 90,
+  "canYield": false,
+  "farmCount": 1,
+  "farmLands": [
+    {
+      "index": 0,
+      "scale": 1,
+      "cropId": 2,
+      "cropName": "小麦",
+      "plantedDate": "2026-11-26T02:55:02.4290519Z",
+      "matureTime": 1,
+      "canYield": false
+    }
+  ]
+}
+```
+
+- `400 Bad Request` —— 现金不足，响应体是 JSON 字符串：
+
+```json
+"现金不足"
+```
+
+- `404 Not Found` —— 作物不存在，或农田不存在（不属于当前用户）：
+
+```json
+"作物不存在"
+```
+
+```json
+"农田不存在"
+```
+
+- `409 Conflict` —— 农田已有作物：
+
+```json
+"该农田已有作物，请先收获"
+```
+
+- `401 Unauthorized` —— 未携带/携带无效 token
+
+**规则**
+
+- 只允许在**空田**（`cropId` 为空）上种植；已有作物的田返回 `409`，需先收获。
+- 种植时**立即扣除** `seedCost` 现金；现金不足返回 `400` 且不落库。
+- 作物成熟时间为 `plantedDate + matureTime 天`（`matureTime` 单位为天），成熟后该田的 `canYield` 变为 `true`。
+
+**示例**
+
+```bash
+curl -X POST http://localhost:5038/api/plant \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"index":0,"cropId":2}'
+```
+
+---
+
 ## 4. 状态码汇总
 
 | 状态码 | 出现场景 | 响应体 |
 | --- | --- | --- |
-| `200` | 请求成功 | 注册/登录：`TokenResponse`；注销/改密/登出：空 |
+| `200` | 请求成功 | 注册/登录：`TokenResponse`；注销/改密/登出：空；谷物列表：`CropListResponse`；用户状态/种植：`StatusResponse` |
+| `400` | 种植时现金不足 | JSON 字符串 `"现金不足"` |
 | `401` | token 缺失、无效、过期，或密码校验失败 | 中间件拦截：`{ "message": "..." }`；端点校验失败：空 |
-| `409` | 注册时用户名已存在 | JSON 字符串 `"用户名已存在"` |
+| `404` | 种植时作物或农田不存在 | JSON 字符串 `"作物不存在"` / `"农田不存在"` |
+| `409` | 注册时用户名已存在；种植时农田已有作物 | JSON 字符串 `"用户名已存在"` / `"该农田已有作物，请先收获"` |
 
 框架层的 `400`（请求体格式错误/反序列化失败）、`404`（路径不存在）、`405`（方法不支持）沿用 ASP.NET Core 默认行为。
 
@@ -230,6 +432,25 @@ curl -X POST http://localhost:5038/api/logout \
 | --- | --- | --- |
 | `TokenResponse` | `token` string | 32 位十六进制 token（GUID `N` 格式） |
 | | `expiresAt` DateTime | 过期时间，UTC |
+| `CropListResponse` | `crops` CropDto[] | 顶层 object，谷物数组 |
+| `CropDto` | `id` int | 谷物主键 |
+| | `cropName` string | 谷物名称（唯一，≤ 12 字符） |
+| | `seedCost` int | 种子价格 |
+| | `matureTime` int | 成熟所需时间（单位：天） |
+| `PlantDto` | `index` int | 目标农田编号 |
+| | `cropId` int | 要种植的作物 id |
+| `StatusResponse` | `userName` string | 当前用户名 |
+| | `cash` int | 现金余额 |
+| | `canYield` bool | 是否有农田作物已成熟可收获 |
+| | `farmCount` int | 农田总数 |
+| | `farmLands` FarmLandDto[] | 农田明细 |
+| `FarmLandDto` | `index` int | 农田编号 |
+| | `scale` int | 农田规模 |
+| | `cropId` int? | 已种植作物 id |
+| | `cropName` string? | 作物名称 |
+| | `plantedDate` DateTime? | 种植时间（UTC） |
+| | `matureTime` int? | 成熟所需天数 |
+| | `canYield` bool | 该块农田是否已成熟可收获 |
 
 ## 6. 注意事项
 
