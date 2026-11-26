@@ -31,6 +31,7 @@ Authorization: Bearer <token>
   - 再次登录会**轮换** token（换新值并重新计时 7 天），旧 token 立即失效
   - 修改密码**不会**作废当前 token，当前会话可继续使用
 - 注销（删除用户）后 token 随用户级联删除，立刻失效
+- 登出（`/api/logout`）只删除 token，不删除用户数据，之后需重新登录获取新 token
 
 鉴权失败统一返回 `401`，响应体为：
 
@@ -50,6 +51,7 @@ Authorization: Bearer <token>
 | POST | `/api/login` | 否 | 登录，校验密码并（重新）签发 token |
 | POST | `/api/cancel` | 是 | 注销账号（删除用户及其数据） |
 | POST | `/api/changepassword` | 是 | 修改当前登录用户的密码 |
+| POST | `/api/logout` | 是 | 登出，作废当前 token（不删除用户） |
 
 ---
 
@@ -190,11 +192,33 @@ curl -X POST http://localhost:5038/api/changepassword \
 
 ---
 
+### 3.5 登出 `POST /api/logout`
+
+需要鉴权。作废当前 token（从 `UserTokens` 表中删除），**不删除用户**，用户数据与农田都保留。
+
+登出后该 token 立即失效（继续使用会返回 `401`），再次登录即可获得新 token。
+
+**请求体**：无。
+
+**响应**
+
+- `200 OK` —— 空响应体
+- `401 Unauthorized` —— 未携带/携带无效 token
+
+**示例**
+
+```bash
+curl -X POST http://localhost:5038/api/logout \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
 ## 4. 状态码汇总
 
 | 状态码 | 出现场景 | 响应体 |
 | --- | --- | --- |
-| `200` | 请求成功 | 注册/登录：`TokenResponse`；注销/改密：空 |
+| `200` | 请求成功 | 注册/登录：`TokenResponse`；注销/改密/登出：空 |
 | `401` | token 缺失、无效、过期，或密码校验失败 | 中间件拦截：`{ "message": "..." }`；端点校验失败：空 |
 | `409` | 注册时用户名已存在 | JSON 字符串 `"用户名已存在"` |
 

@@ -16,6 +16,7 @@ public static class Endpoints
         app.MapPost("/api/login", Login);
         app.MapPost("/api/cancel", Cancel);
         app.MapPost("/api/changepassword", ChangePassword);
+        app.MapPost("/api/logout", Logout);
     }
 
     private static async Task<Results<Ok<TokenResponse>, Conflict<string>>> 
@@ -126,6 +127,25 @@ public static class Endpoints
         // 用新密码重新哈希后存库
         user.PasswordHash = _hasher.HashPassword(user, changePasswordDto.NewPassword);
         await db.SaveChangesAsync();
+        return TypedResults.Ok();
+    }
+
+    private static async Task<Results<Ok, UnauthorizedHttpResult>>
+        Logout(HttpContext httpContext, AppDbContext db)
+    {
+        // 用户由token鉴权中间件解析后挂在HttpContext上
+        var user = httpContext.Items[TokenAuthMiddleware.UserItemKey] as User;
+        if (user is null)
+            return TypedResults.Unauthorized();
+
+        // 删除该用户的token，使其立即失效（下次登录会重新签发）
+        var token = await db.UserTokens.FirstOrDefaultAsync(t => t.UserId == user.Id);
+        if (token is not null)
+        {
+            db.UserTokens.Remove(token);
+            await db.SaveChangesAsync();
+        }
+
         return TypedResults.Ok();
     }
 }
