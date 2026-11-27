@@ -274,7 +274,7 @@ curl http://localhost:5038/api/crops \
 {
   "userName": "farmer01",
   "cash": 100,
-  "canYield": true,
+  "harvestable": true,
   "farmCount": 2,
   "farmLands": [
     {
@@ -284,7 +284,7 @@ curl http://localhost:5038/api/crops \
       "cropName": "小麦",
       "plantedDate": "2026-11-29T08:00:00Z",
       "matureTime": 1,
-      "canYield": true
+      "harvestable": true
     },
     {
       "index": 1,
@@ -293,7 +293,7 @@ curl http://localhost:5038/api/crops \
       "cropName": null,
       "plantedDate": null,
       "matureTime": null,
-      "canYield": false
+      "harvestable": false
     }
   ]
 }
@@ -307,7 +307,7 @@ curl http://localhost:5038/api/crops \
 | --- | --- | --- |
 | `userName` | string | 当前登录用户名 |
 | `cash` | int | 现金余额 |
-| `canYield` | bool | 是否有**至少一块**农田的作物已成熟、可以收获 |
+| `harvestable` | bool | 是否有**至少一块**农田的作物已成熟、可以收获 |
 | `farmCount` | int | 该用户拥有的农田总数 |
 | `farmLands` | FarmLandDto[] | 农田明细，按 `index` 升序 |
 
@@ -321,7 +321,7 @@ curl http://localhost:5038/api/crops \
 | `cropName` | string? | 作物名称，无作物时为 `null` |
 | `plantedDate` | DateTime? | 种植时间（UTC），无作物时为 `null` |
 | `matureTime` | int? | 作物成熟所需天数，无作物时为 `null` |
-| `canYield` | bool | 该块农田的作物是否已成熟可收获 |
+| `harvestable` | bool | 该块农田的作物是否已成熟可收获 |
 
 > 成熟判断：`plantedDate + matureTime 天 <= 当前 UTC 时间` 即视为可收获；无作物或未到期的农田为 `false`。
 
@@ -357,7 +357,7 @@ curl http://localhost:5038/api/status \
 {
   "userName": "farmer01",
   "cash": 90,
-  "canYield": false,
+  "harvestable": false,
   "farmCount": 1,
   "farmLands": [
     {
@@ -367,7 +367,7 @@ curl http://localhost:5038/api/status \
       "cropName": "小麦",
       "plantedDate": "2026-11-26T02:55:02.4290519Z",
       "matureTime": 1,
-      "canYield": false
+      "harvestable": false
     }
   ]
 }
@@ -401,7 +401,7 @@ curl http://localhost:5038/api/status \
 
 - 只允许在**空田**（`cropId` 为空）上种植；已有作物的田返回 `409`，需先收获。
 - 种植时**立即扣除** `seedCost` 现金；现金不足返回 `400` 且不落库。
-- 作物成熟时间为 `plantedDate + matureTime 天`（`matureTime` 单位为天），成熟后该田的 `canYield` 变为 `true`。
+- 作物成熟时间为 `plantedDate + matureTime 天`（`matureTime` 单位为天），成熟后该田的 `harvestable` 变为 `true`。
 
 **示例**
 
@@ -441,7 +441,7 @@ curl -X POST http://localhost:5038/api/plant \
 | | `cropId` int | 要种植的作物 id |
 | `StatusResponse` | `userName` string | 当前用户名 |
 | | `cash` int | 现金余额 |
-| | `canYield` bool | 是否有农田作物已成熟可收获 |
+| | `harvestable` bool | 是否有农田作物已成熟可收获 |
 | | `farmCount` int | 农田总数 |
 | | `farmLands` FarmLandDto[] | 农田明细 |
 | `FarmLandDto` | `index` int | 农田编号 |
@@ -450,7 +450,7 @@ curl -X POST http://localhost:5038/api/plant \
 | | `cropName` string? | 作物名称 |
 | | `plantedDate` DateTime? | 种植时间（UTC） |
 | | `matureTime` int? | 成熟所需天数 |
-| | `canYield` bool | 该块农田是否已成熟可收获 |
+| | `harvestable` bool | 该块农田是否已成熟可收获 |
 
 ## 6. 注意事项
 

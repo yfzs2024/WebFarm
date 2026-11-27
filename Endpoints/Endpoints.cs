@@ -239,7 +239,7 @@ public static class Endpoints
                 var plantedDate = f.PlantedDate is null
                     ? (DateTime?)null
                     : DateTime.SpecifyKind(f.PlantedDate.Value, DateTimeKind.Utc);
-                var canYield = f.PlantedDate is not null
+                var harvestable = f.PlantedDate is not null
                     && f.Crop is not null
                     && f.PlantedDate.Value.AddDays(f.Crop.MatureTime) <= now;
                 return new FarmLandDto(
@@ -249,14 +249,14 @@ public static class Endpoints
                     f.Crop?.CropName,
                     plantedDate,
                     f.Crop?.MatureTime,
-                    canYield);
+                    harvestable);
             })
             .ToList();
 
         return new StatusResponse(
             user.UserName,
             user.Cash,
-            lands.Any(l => l.CanYield),
+            lands.Any(l => l.Harvestable),
             farmLands.Count,
             lands);
     }
@@ -277,10 +277,10 @@ public record FarmLandDto(
     string? CropName,
     DateTime? PlantedDate,
     int? MatureTime,
-    bool CanYield);
+    bool Harvestable);
 public record StatusResponse(
     string UserName,
     int Cash,
-    bool CanYield,
+    bool Harvestable,
     int FarmCount,
     List<FarmLandDto> FarmLands);
